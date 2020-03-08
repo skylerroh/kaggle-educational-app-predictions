@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np 
-import pyspark
-from pyspark.context import SparkContext
-from pyspark.sql.session import SparkSession
+# import pyspark
+# from pyspark.context import SparkContext
+# from pyspark.sql.session import SparkSession
 import tensorflow as tf
 
 sc = SparkContext.getOrCreate('local')
