@@ -5,8 +5,8 @@ import numpy as np
 # from pyspark.sql.session import SparkSession
 import tensorflow as tf
 
-sc = SparkContext.getOrCreate('local')
-spark = SparkSession(sc)
+# sc = SparkContext.getOrCreate('local')
+# spark = SparkSession(sc)
 
 def read_data():
     print('Reading train.csv file....')
