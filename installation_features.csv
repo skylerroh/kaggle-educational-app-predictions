@@ -1,4 +1,4 @@
-installation_id,game_session_y,event_count,game_time,num_unique_days,elapsed_days,last_world,unique_game_sessions,title_y,num_correct,num_incorrect,accuracy,accuracy_group,Activity,Game,Assessment,Clip
+installation_id,game_session_y,event_count,game_time,num_unique_days,elapsed_days,last_world,unique_game_sessions,title_y,num_correct,num_incorrect,accuracy,accuracy_group,activity_ct,game_ct,assessment_ct,clip_ct
 0006a69f,77b8ee947eb84b4e,80570,75295894,1,0 days 00:00:00.000000000,TREETOPCITY,26,Bird Measurer (Assessment),0,11,0.0,0,556.0,525.0,135.0,14.0
 0006a69f,9501794defd84e4d,135226,196920049,1,0 days 00:00:00.000000000,TREETOPCITY,48,Mushroom Sorter (Assessment),1,1,0.5,2,1103.0,845.0,229.0,24.0
 0006c192,197a373a77101924,141995,140663742,2,1 days 00:00:00.000000000,MAGMAPEAK,26,Cauldron Filler (Assessment),1,0,1.0,3,894.0,633.0,24.0,15.0

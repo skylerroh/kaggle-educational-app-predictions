@@ -72,4 +72,6 @@ def get_basic_user_features(train_data, train_labels):
 	groups = train_w_labels.groupby(['installation_id', 'game_session_y'])
 	features = groups.apply(lambda x: summarize_events_before_game_session(x, game_session=x.name[1])).reset_index()
 	expanded_counts = features.type_counts.apply(pd.Series)
+	# rename the type count columns
+	expanded_counts.columns = [c.lower()+'_ct' for c in expanded_counts.columns]
 	return pd.concat([features.drop(['type_counts'], axis=1), expanded_counts], axis=1)
