@@ -37,7 +37,7 @@ def days_since_first_event(timestamps):
 def get_events_before_game_session(events, game_session):
 	game_session_index = events.index[(events.game_session_x == game_session)]
 	if not game_session_index.empty:
-		return events.loc[:game_session_index]
+		return events.loc[:game_session_index[-1]]
 	else:
 		return events
 
@@ -45,7 +45,7 @@ def summarize_events(events):
 	"""
 	takes a dataframe of events and returns a pd.Series with aggregate/summary values
 	"""
-	events = events.sort_values('timestamp')
+	events = events.sort_values('timestamp').reset_index()
 	events = events.rename(columns={'game_session_x': 'game_session'}, errors='ignore')
 	numeric_rows = ['event_count', 'game_time']
 	aggregates = events[numeric_rows].sum()
@@ -56,8 +56,8 @@ def summarize_events(events):
 	aggregates['unique_game_sessions'] = events.game_session.unique().size
 	return aggregates
 
-def summarize_events_before_game_session(events):
-	game_session = events.game_session_y.values[0]
+def summarize_events_before_game_session(events, game_session):
+	# game_session = events['game_session_y'].min()
 	events_before = get_events_before_game_session(events, game_session)
 	aggregates = summarize_events(events_before)
 	labels = events[['title_y', 'num_correct',
@@ -67,15 +67,9 @@ def summarize_events_before_game_session(events):
 
 
 def get_basic_user_features(train_data, train_labels):
-	# train_df = spark.createDataFrame(train_data[['event_id', 'game_session', 'timestamp', 'installation_id', 'event_count', 'event_code', 'game_time', 'title',
- #       'type', 'world']])
-	# train_labels = spark.createDataFrame(train_labels)
-	# train_w_label = train_df.join(df2, on=['installation_id'], how='inner')
-	# train_w_label.printSchema()
-	# train_w_label.groupBy(lambda x: x.game_session).mapValues(get_events_before_game_session)
-	# return train_w_label
 	train_w_labels = train_data[['event_id', 'game_session', 'timestamp', 'installation_id', 'event_count', 'event_code', 'game_time', 'title',
            'type', 'world']].merge(train_labels, on='installation_id')
 	groups = train_w_labels.groupby(['installation_id', 'game_session_y'])
-	return groups.apply(summarize_events_before_game_session).reset_index()
-
+	features = groups.apply(lambda x: summarize_events_before_game_session(x, game_session=x.name[1])).reset_index()
+	expanded_counts = features.type_counts.apply(pd.Series)
+	return pd.concat([features.drop(['type_counts'], axis=1), expanded_counts], axis=1)
