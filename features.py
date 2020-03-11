@@ -41,6 +41,17 @@ def get_events_before_game_session(events, game_session):
 	else:
 		return events
 
+def group_by_game_session_and_sum(events, columns):
+	"""
+	some columns are rolling counts by game session, 
+	take the max value of each game session then some for totals
+	"""
+	series = pd.Series()
+	for c in columns:
+		series[c] = events.groupby('game_session')[c].max().sum()
+	return series
+
+
 def summarize_events(events):
 	"""
 	takes a dataframe of events and returns a pd.Series with aggregate/summary values
@@ -48,10 +59,12 @@ def summarize_events(events):
 	events = events.sort_values('timestamp').reset_index()
 	events = events.rename(columns={'game_session_x': 'game_session'}, errors='ignore')
 	numeric_rows = ['event_count', 'game_time']
-	aggregates = events[numeric_rows].sum()
+	aggregates = group_by_game_session_and_sum(events, numeric_rows)
+	aggregates['game_time'] = aggregates['game_time'] / 1000
 	aggregates['num_unique_days'] = num_unique_days(events['timestamp'])
 	aggregates['elapsed_days'] = days_since_first_event(events['timestamp'])
 	aggregates['last_world'] = events.tail(1)['world'].values[0]
+	aggregates['last_game_session'] = events.tail(1)['game_session'].values[0]
 	aggregates['type_counts'] = events.type.value_counts()
 	aggregates['unique_game_sessions'] = events.game_session.unique().size
 	return aggregates
@@ -75,3 +88,5 @@ def get_basic_user_features(train_data, train_labels):
 	# rename the type count columns
 	expanded_counts.columns = [c.lower()+'_ct' for c in expanded_counts.columns]
 	return pd.concat([features.drop(['type_counts'], axis=1), expanded_counts], axis=1)
+
+
