@@ -1,6 +1,10 @@
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransformer
 
 
 def read_data():
@@ -28,7 +32,7 @@ def num_unique_days(timestamps):
 
 def days_since_first_event(timestamps):
     dates = pd.to_datetime(timestamps).apply(lambda x: x.date())
-    return dates.max() - dates.min()
+    return (dates.max() - dates.min()).days
 
 
 def get_events_before_game_session(events, game_session):
@@ -88,7 +92,7 @@ def split_features_and_labels(df):
 def basic_user_features_transform(train_data, train_labels=None):
     data = train_data[['event_id', 'game_session', 'timestamp', 'installation_id', 'event_count', 'event_code',
                        'game_time', 'title', 'type', 'world']]
-    if train_labels:
+    if train_labels is not None:
         train_w_labels = data.merge(train_labels, on='installation_id')
         groups = train_w_labels.groupby(['installation_id', 'game_session_y'])
     else:
@@ -96,14 +100,38 @@ def basic_user_features_transform(train_data, train_labels=None):
     # game session y is index 1 of the group name
     # passing none to game session is for eval data, does not subset any of the data for each installation_id
     features = groups \
-        .apply(lambda x: summarize_events_before_game_session(x, game_session=x.name[1] if len(x) == 2 else '')) \
+        .apply(lambda x: summarize_events_before_game_session(x, game_session=x.name[1] if len(x.name) == 2 else '')) \
         .reset_index()
-    expanded_counts = features.type_counts.apply(pd.Series)
+    expanded_counts = features.type_counts.apply(pd.Series).fillna(0)
     # rename the type count columns
     expanded_counts.columns = [c.lower()+'_ct' for c in expanded_counts.columns]
     feats = pd.concat([features.drop(['type_counts'], axis=1), expanded_counts], axis=1)
 
-    if train_labels:
+    if train_labels is not None:
         return split_features_and_labels(feats)
     else:
         return feats, None
+
+def get_data_processing_pipe(feats, log_features, categorical_features):
+    # We create the preprocessing pipelines for both numeric and categorical data.
+    numeric_features = [c for c in feats.columns if c not in log_features+categorical_features]
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(fill_value=0)),
+        ('scaler', StandardScaler())])
+
+    numeric_log_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(fill_value=1)),
+        ('log_scale', FunctionTransformer(np.log)),
+        ('scaler', StandardScaler())])
+
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore'))])
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features),
+            ('num_log', numeric_log_transformer, log_features),
+            ('cat', categorical_transformer, categorical_features)])
+
+    return preprocessor
