@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import tensorflow as tf
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
@@ -36,7 +35,7 @@ def days_since_first_event(timestamps):
 
 
 def get_events_before_game_session(events, game_session):
-    game_session_index = events.index[(events.game_session_x == game_session)]
+    game_session_index = events.index[(events.game_session == game_session)]
     if not game_session_index.empty:
         return events.loc[:game_session_index[-1]]
     else:
@@ -58,7 +57,6 @@ def summarize_events(events):
     takes a dataframe of events and returns a pd.Series with aggregate/summary values
     """
     events = events.sort_values('timestamp').reset_index()
-    events = events.rename(columns={'game_session_x': 'game_session'}, errors='ignore')
     numeric_rows = ['event_count', 'game_time']
     aggregates = group_by_game_session_and_sum(events, numeric_rows)
     aggregates['game_time'] = aggregates['game_time'] / 1000
@@ -67,16 +65,21 @@ def summarize_events(events):
     aggregates['last_world'] = events.tail(1)['world'].values[0]
     aggregates['last_game_session'] = events.tail(1)['game_session'].values[0]
     aggregates['type_counts'] = events.type.value_counts()
+    aggregates['event_code_counts'] = events.event_code.value_counts()
     aggregates['unique_game_sessions'] = events.game_session.unique().size
     return aggregates
 
 
 def summarize_events_before_game_session(events, game_session):
+    events = events.rename(columns={'game_session_x': 'game_session'}, errors='ignore')
     events_before = get_events_before_game_session(events, game_session)
     aggregates = summarize_events(events_before)
-    labels = events[['title_y', 'num_correct',
-       'num_incorrect', 'accuracy', 'accuracy_group']].iloc[0]
-    row = aggregates.append(labels)
+    try:
+        labels = events[['title_y', 'num_correct', 'num_incorrect', 'accuracy', 'accuracy_group']].iloc[0]
+        row = aggregates.append(labels)
+    except KeyError:
+        row = aggregates
+        # print("no label columns, just returning features")
     return row
 
 
@@ -102,10 +105,14 @@ def basic_user_features_transform(train_data, train_labels=None):
     features = groups \
         .apply(lambda x: summarize_events_before_game_session(x, game_session=x.name[1] if len(x.name) == 2 else '')) \
         .reset_index()
-    expanded_counts = features.type_counts.apply(pd.Series).fillna(0)
+    expanded_type_counts = features.type_counts.apply(pd.Series).fillna(0)
     # rename the type count columns
-    expanded_counts.columns = [c.lower()+'_ct' for c in expanded_counts.columns]
-    feats = pd.concat([features.drop(['type_counts'], axis=1), expanded_counts], axis=1)
+    expanded_type_counts.columns = [c.lower()+'_ct' for c in expanded_type_counts.columns]
+
+    expanded_event_code_counts = features.event_code_counts.apply(pd.Series).fillna(0)
+    # rename the event_code count columns
+    expanded_event_code_counts.columns = ['event_{}_ct'.format(int(c)) for c in expanded_event_code_counts.columns]
+    feats = pd.concat([features.drop(['type_counts', 'event_code_counts'], axis=1), expanded_type_counts, expanded_event_code_counts], axis=1)
 
     if train_labels is not None:
         return split_features_and_labels(feats)
