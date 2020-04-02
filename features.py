@@ -25,6 +25,15 @@ def read_data():
     return train, test, train_labels, specs
 
 
+def get_worst_score(group):
+    return group.sort_values('accuracy_group').iloc[0]
+
+
+def is_assessment(titles_series):
+    def is_assessment_title(title):
+        return "assessment" in title.lower()
+    return titles_series.apply(lambda x: is_assessment_title(x))
+
 def num_unique_days(timestamps):
     return pd.to_datetime(timestamps).apply(lambda x: x.date()).unique().size
 
@@ -44,7 +53,7 @@ def get_events_before_game_session(events, game_session):
 def group_by_game_session_and_sum(events, columns):
     """
     some columns are rolling counts by game session,
-    take the max value of each game session then some for totals
+    take the max value of each game session then sum for totals
     """
     series = pd.Series()
     for c in columns:
@@ -63,7 +72,9 @@ def summarize_events(events):
     aggregates['num_unique_days'] = num_unique_days(events['timestamp'])
     aggregates['elapsed_days'] = days_since_first_event(events['timestamp'])
     aggregates['last_world'] = events.tail(1)['world'].values[0]
+    aggregates['last_assessment'] = events[is_assessment(events['title'])].tail(1)['title'].values[0]
     aggregates['last_game_session'] = events.tail(1)['game_session'].values[0]
+    aggregates['assessments_taken'] = events['title'][is_assessment(events['title'])].value_counts()
     aggregates['type_counts'] = events.type.value_counts()
     aggregates['event_code_counts'] = events.event_code.value_counts()
     aggregates['unique_game_sessions'] = events.game_session.unique().size
@@ -71,7 +82,7 @@ def summarize_events(events):
 
 
 def summarize_events_before_game_session(events, game_session):
-    events = events.rename(columns={'game_session_x': 'game_session'}, errors='ignore')
+    events = events.rename(columns={'game_session_x': 'game_session', 'title_x': 'title'}, errors='ignore')
     events_before = get_events_before_game_session(events, game_session)
     aggregates = summarize_events(events_before)
     try:
@@ -112,7 +123,10 @@ def basic_user_features_transform(train_data, train_labels=None):
     expanded_event_code_counts = features.event_code_counts.apply(pd.Series).fillna(0)
     # rename the event_code count columns
     expanded_event_code_counts.columns = ['event_{}_ct'.format(int(c)) for c in expanded_event_code_counts.columns]
-    feats = pd.concat([features.drop(['type_counts', 'event_code_counts'], axis=1), expanded_type_counts, expanded_event_code_counts], axis=1)
+    
+    expanded_assessments_taken = features.assessments_taken.apply(pd.Series).fillna(0)
+    
+    feats = pd.concat([features.drop(['type_counts', 'event_code_counts', 'assessments_taken'], axis=1), expanded_type_counts, expanded_event_code_counts, expanded_assessments_taken], axis=1)
 
     if train_labels is not None:
         return split_features_and_labels(feats)
@@ -142,3 +156,15 @@ def get_data_processing_pipe(feats, log_features, categorical_features):
             ('cat', categorical_transformer, categorical_features)])
 
     return preprocessor
+
+def main():
+    train, test, train_labels, specs = read_data()
+    labels = train_labels.groupby(['installation_id', 'title']).apply(get_worst_score).reset_index(drop=True)
+    feats, labels = basic_user_features_transform(train, labels)
+    # Save checkpoint
+    feats.to_csv('installation_features.csv', index=False)
+    labels.to_csv('installation_labels.csv', index=False)
+    
+
+if __name__ == '__main__':
+    main()
