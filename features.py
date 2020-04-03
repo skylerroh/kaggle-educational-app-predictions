@@ -5,6 +5,13 @@ from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransformer
 
+###
+# def get_last_event(group):
+#     return group.sort_values('timestamp', ascending=False).iloc[0]
+# last_events = test.groupby('installation_id').apply(get_last_event).event_id.value_counts()
+# print(last_events.index) # ['7ad3efc6', '3bfd1a65', '90d848e0', '5b49460a', 'f56e0afc']
+###
+last_events_before_assessment = ['7ad3efc6', '3bfd1a65', '90d848e0', '5b49460a', 'f56e0afc']
 
 def read_data():
     print('Reading train.csv file....')
@@ -44,7 +51,8 @@ def days_since_first_event(timestamps):
 
 
 def get_events_before_game_session(events, game_session):
-    game_session_index = events.index[(events.game_session == game_session)]
+    game_session_index = events.index[(events.game_session == game_session) & \
+                                       (events.event_id.isin(last_events_before_assessment))]
     if not game_session_index.empty:
         return events.loc[:game_session_index[-1]]
     else:
@@ -74,7 +82,7 @@ def summarize_events(events):
     aggregates['last_world'] = events.tail(1)['world'].values[0]
     aggregates['last_assessment'] = events[is_assessment(events['title'])].tail(1)['title'].values[0]
     aggregates['last_game_session'] = events.tail(1)['game_session'].values[0]
-    aggregates['assessments_taken'] = events['title'][is_assessment(events['title'])].value_counts()
+    aggregates['assessments_taken'] = events['title'][events.event_id.isin(last_events_before_assessment)].value_counts()
     aggregates['type_counts'] = events.type.value_counts()
     aggregates['event_code_counts'] = events.event_code.value_counts()
     aggregates['unique_game_sessions'] = events.game_session.unique().size
@@ -136,6 +144,10 @@ def basic_user_features_transform(train_data, train_labels=None):
 def get_data_processing_pipe(feats, log_features, categorical_features):
     # We create the preprocessing pipelines for both numeric and categorical data.
     numeric_features = [c for c in feats.columns if c not in log_features+categorical_features]
+    for f in log_features:
+        non_zero_min = feats[f][feats[f]!=0].min()
+        feats[f] = feats[f].replace([0], non_zero_min)
+    
     numeric_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(fill_value=0)),
         ('scaler', StandardScaler())])
@@ -159,8 +171,8 @@ def get_data_processing_pipe(feats, log_features, categorical_features):
 
 def main():
     train, test, train_labels, specs = read_data()
-    labels = train_labels.groupby(['installation_id', 'title']).apply(get_worst_score).reset_index(drop=True)
-    feats, labels = basic_user_features_transform(train, labels)
+    # train_labels = train_labels.groupby(['installation_id', 'title']).apply(get_worst_score).reset_index(drop=True)
+    feats, labels = basic_user_features_transform(train, train_labels)
     # Save checkpoint
     feats.to_csv('installation_features.csv', index=False)
     labels.to_csv('installation_labels.csv', index=False)
