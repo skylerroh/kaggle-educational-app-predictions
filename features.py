@@ -173,9 +173,11 @@ def main():
     train, test, train_labels, specs = read_data()
     # train_labels = train_labels.groupby(['installation_id', 'title']).apply(get_worst_score).reset_index(drop=True)
     feats, labels = basic_user_features_transform(train, train_labels)
+    test_feats, _ = basic_user_features_transform(test)
     # Save checkpoint
     feats.to_csv('installation_features.csv', index=False)
     labels.to_csv('installation_labels.csv', index=False)
+    test_feats.to_csv('test_feats.csv', index=False)
     
 
 if __name__ == '__main__':
