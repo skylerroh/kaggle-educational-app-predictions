@@ -11,7 +11,11 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder, FunctionTransfo
 # last_events = test.groupby('installation_id').apply(get_last_event).event_id.value_counts()
 # print(last_events.index) # ['7ad3efc6', '3bfd1a65', '90d848e0', '5b49460a', 'f56e0afc']
 ###
-last_events_before_assessment = ['7ad3efc6', '3bfd1a65', '90d848e0', '5b49460a', 'f56e0afc']
+last_event_before_assessment = {'Cauldron Filler (Assessment)': '90d848e0',
+                                'Cart Balancer (Assessment)': '7ad3efc6',
+                                'Mushroom Sorter (Assessment)': '3bfd1a65',
+                                'Bird Measurer (Assessment)': 'f56e0afc',
+                                'Chest Sorter (Assessment)': '5b49460a'}
 
 def read_data():
     print('Reading train.csv file....')
@@ -50,9 +54,9 @@ def days_since_first_event(timestamps):
     return (dates.max() - dates.min()).days
 
 
-def get_events_before_game_session(events, game_session):
+def get_events_before_game_session(events, game_session, assessment_title):
     game_session_index = events.index[(events.game_session == game_session) & \
-                                       (events.event_id.isin(last_events_before_assessment))]
+                                       (events.event_id == last_event_before_assessment[assessment_title])]
     if not game_session_index.empty:
         return events.loc[:game_session_index[-1]]
     else:
@@ -89,9 +93,9 @@ def summarize_events(events):
     return aggregates
 
 
-def summarize_events_before_game_session(events, game_session):
+def summarize_events_before_game_session(events, game_session, assessment):
     events = events.rename(columns={'game_session_x': 'game_session', 'title_x': 'title'}, errors='ignore')
-    events_before = get_events_before_game_session(events, game_session)
+    events_before = get_events_before_game_session(events, game_session, assessment)
     aggregates = summarize_events(events_before)
     try:
         labels = events[['title_y', 'num_correct', 'num_incorrect', 'accuracy', 'accuracy_group']].iloc[0]
@@ -106,7 +110,7 @@ def split_features_and_labels(df):
     labels_df = df[['title_y', 'num_correct', 'num_incorrect',
                     'accuracy', 'accuracy_group', 'installation_id', 'game_session_y']].copy()
     feats_df = df.drop(
-        ['title_y', 'num_correct', 'num_incorrect', 'installation_id', 'game_session_y', 'last_game_session',
+        ['title_y', 'num_correct', 'num_incorrect', 'game_session_y', 'last_game_session',
          'accuracy', 'accuracy_group'], axis=1)
     return feats_df, labels_df
 
@@ -116,13 +120,15 @@ def basic_user_features_transform(train_data, train_labels=None):
                        'game_time', 'title', 'type', 'world']]
     if train_labels is not None:
         train_w_labels = data.merge(train_labels, on='installation_id')
-        groups = train_w_labels.groupby(['installation_id', 'game_session_y'])
+        groups = train_w_labels.groupby(['installation_id', 'game_session_y', 'title_y'])
     else:
         groups = data.groupby(['installation_id'])
     # game session y is index 1 of the group name
     # passing none to game session is for eval data, does not subset any of the data for each installation_id
     features = groups \
-        .apply(lambda x: summarize_events_before_game_session(x, game_session=x.name[1] if len(x.name) == 2 else '')) \
+        .apply(lambda x: summarize_events_before_game_session(x, 
+                                                              game_session=x.name[1] if len(x.name) == 2 else '',
+                                                              assessment=x.name[2] if len(x.name) == 2 else '')) \
         .reset_index()
     expanded_type_counts = features.type_counts.apply(pd.Series).fillna(0)
     # rename the type count columns
@@ -131,6 +137,9 @@ def basic_user_features_transform(train_data, train_labels=None):
     expanded_event_code_counts = features.event_code_counts.apply(pd.Series).fillna(0)
     # rename the event_code count columns
     expanded_event_code_counts.columns = ['event_{}_ct'.format(int(c)) for c in expanded_event_code_counts.columns]
+    # non_zero_event_code_counts 
+    for ec in expanded_event_code_counts.columns:
+        expanded_event_code_counts['non_zero_'+ec] = expanded_event_code_counts[ec] > 0
     
     expanded_assessments_taken = features.assessments_taken.apply(pd.Series).fillna(0)
     
@@ -143,18 +152,15 @@ def basic_user_features_transform(train_data, train_labels=None):
 
 def get_data_processing_pipe(feats, log_features, categorical_features):
     # We create the preprocessing pipelines for both numeric and categorical data.
-    numeric_features = [c for c in feats.columns if c not in log_features+categorical_features]
-    for f in log_features:
-        non_zero_min = feats[f][feats[f]!=0].min()
-        feats[f] = feats[f].replace([0], non_zero_min)
-    
+    numeric_features = [c for c in feats.columns if c not in log_features+categorical_features+['installation_id']]
+
     numeric_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(fill_value=0)),
+        ('imputer', SimpleImputer(fill_value=0, strategy='constant')),
         ('scaler', StandardScaler())])
 
     numeric_log_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(fill_value=1)),
-        ('log_scale', FunctionTransformer(np.log)),
+        ('imputer', SimpleImputer(fill_value=0, strategy='constant')),
+        ('log_scale', FunctionTransformer(np.log1p)),
         ('scaler', StandardScaler())])
 
     categorical_transformer = Pipeline(steps=[
@@ -162,6 +168,7 @@ def get_data_processing_pipe(feats, log_features, categorical_features):
         ('onehot', OneHotEncoder(handle_unknown='ignore'))])
 
     preprocessor = ColumnTransformer(
+        remainder='drop',
         transformers=[
             ('num', numeric_transformer, numeric_features),
             ('num_log', numeric_log_transformer, log_features),
