@@ -64,7 +64,7 @@ def days_since_first_event(timestamps):
     dates = pd.to_datetime(timestamps).apply(lambda x: x.date())
     return (dates.max() - dates.min()).days
 
-## FIX
+
 def get_events_before_game_session(events, game_session, assessment_title):
     if not (game_session or assessment_title):
         return events
@@ -75,6 +75,20 @@ def get_events_before_game_session(events, game_session, assessment_title):
         return events.loc[:game_session_index[-1]]
 
 
+def get_clip_duration_features(events):
+    clips = events[events.type=='Clip']
+    if clips.empty:
+        game_time = 0
+        skip_rate = 0
+        avg_watch_length = 0
+    else:
+        game_time = clips.apply(lambda x: min(x.ts_diff, clip_times.get(x.title)), axis=1).sum()
+        skip_rate = clips.apply(lambda x: x.ts_diff < clip_times.get(x.title), axis=1).mean()
+        avg_watch_length = clips.apply(lambda x: min(x.ts_diff / clip_times.get(x.title), 1), axis=1).mean()
+    return pd.Series([game_time, skip_rate, avg_watch_length], 
+                     index=['clip_game_time', 'clip_skip_rate', 'clip_avg_watch_length'],
+                     dtype=float)
+    
 def group_by_game_session_and_sum(events, columns):
     """
     some columns are rolling counts by game session,
@@ -95,6 +109,7 @@ def group_by_game_session_and_sum(events, columns):
             series['total_'+c] += session_value
         if c=='game_time':
             series = series.drop(labels='clip_'+c)
+            series = series.append(get_clip_duration_features(events))
     return series
 
 
@@ -102,7 +117,6 @@ def summarize_events(events):
     """
     takes a dataframe of events and returns a pd.Series with aggregate/summary values
     """
-    events['ts'] = pd.to_datetime(events.timestamp)
     events = events.sort_values('ts').reset_index()
     events['ts_diff'] = -events.ts.diff(-1).dt.total_seconds()
     numeric_rows = ['event_count', 'game_time']
@@ -122,20 +136,23 @@ def summarize_events(events):
 
 def summarize_events_before_game_session(name, events):
     if not isinstance(name, (list,tuple)) or len(name)==1:
+        # for test data
         game_session=None
         assessment=None
+        name_series = pd.Series([name], index=['installation_id'])
     else:
         installation_id, game_session, assessment = name
+        name_series = pd.Series(name, index=['installation_id', 'game_session_y', 'title_y'])
     
     events = events.rename(columns={'game_session_x': 'game_session', 'title_x': 'title'}, errors='ignore')
     events_before = get_events_before_game_session(events, game_session, assessment)
     aggregates = summarize_events(events_before)
     try:
         labels = events[['num_correct', 'num_incorrect', 'accuracy', 'accuracy_group']].iloc[0] \
-            .append(pd.Series(name, index=['installation_id', 'game_session_y', 'title_y']))
+            .append(name_series)
         row = aggregates.append(labels)
     except KeyError:
-        row = aggregates
+        row = aggregates.append(name_series)
         # print("no label columns, just returning features")
     return row
 
@@ -150,7 +167,6 @@ def expand_count_features(features):
     expanded_title_counts = features.title_counts.apply(pd.Series).fillna(0)
     # rename the type count columns
     expanded_title_counts.columns = [c.lower().replace(' ', '_')+'_ct' for c in expanded_title_counts.columns]
-    
 
     print('**expanding event code count features**')
     expanded_event_code_counts = features.event_code_counts.apply(pd.Series).fillna(0)
@@ -183,6 +199,7 @@ def split_features_and_labels(df):
 def basic_user_features_transform(train_data, train_labels=None):
     data = train_data[['event_id', 'game_session', 'timestamp', 'installation_id', 'event_count', 'event_code',
                        'game_time', 'title', 'type', 'world']]
+    data['ts'] = pd.to_datetime(data.timestamp)
     if train_labels is not None:
         train_w_labels = data.merge(train_labels, on='installation_id')
         groups = train_w_labels.groupby(['installation_id', 'game_session_y', 'title_y'])
@@ -235,6 +252,13 @@ def main():
     feats, labels = basic_user_features_transform(train, train_labels)
     print('**transforming test data**')
     test_feats, _ = basic_user_features_transform(test)
+    
+    print('**filling missing columns in test**')
+    # Test set does not contain all event ids so need to fill in
+    for c in feats.columns:
+        if c not in test_feats.columns:
+            test_feats[c] = 0
+            
     # Save checkpoint
     print('**saving csvs**')
     feats.to_csv('installation_features_v2.csv', index=False)
