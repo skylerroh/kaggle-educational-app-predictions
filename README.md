@@ -14,13 +14,13 @@ The outcomes in this competition are grouped into 4 groups (labeled accuracy_gro
 
 Submissions are scored based on the quadratic weighted kappa, which measures the agreement between two outcomes. The quadratic weighted kappa is calculated as follows. First, an N x N histogram matrix O is constructed, such that Oi,j corresponds to the number of installation_ids i (actual) that received a predicted value j. An N-by-N matrix of weights, w, is calculated based on the difference between actual and predicted values:  
   
-$w_{i,j}=\frac{(i−j)^2}{(N−1)^2}$
+<img src="https://render.githubusercontent.com/render/math?math=w_{i,j}=\frac{(i−j)^2}{(N−1)^2}"
  
 An N-by-N histogram matrix of expected outcomes, E, is calculated assuming that there is no correlation between values.  This is calculated as the outer product between the actual histogram vector of outcomes and the predicted histogram vector, normalized such that E and O have the same sum.
 
 From these three matrices, the quadratic weighted kappa is calculated as: 
-
-$κ=1−\frac{∑_{i,j}w_{i,j}O{i,j}}{∑_{i,j}w_{i,j}E_{i,j}}$
+  
+<img src="https://render.githubusercontent.com/render/math?math=κ=1−\frac{∑_{i,j}w_{i,j}O{i,j}}{∑_{i,j}w_{i,j}E_{i,j}}"
 
 ## Feature Engineering
 This dataset requires substantial feature engineering as the training and test datasets given are event logs for each `installation_id` of the PBS KIDS Measure Up! app. The training dataset contains 11,341,042 events for 17,690 installation_id/assessments combinations. 
