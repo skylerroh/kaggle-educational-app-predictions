@@ -22,6 +22,11 @@ From these three matrices, the quadratic weighted kappa is calculated as:
   
 <img src="https://latex.codecogs.com/gif.latex?K&space;=&space;1&space;-&space;(\sum_{i,j}&space;w_{i,j}O_{i,j}&space;/&space;\sum_{i,j}&space;w_{i,j}E_{i,j})" title="K = 1 - (\sum_{i,j} w_{i,j}O_{i,j} / \sum_{i,j} w_{i,j}E_{i,j})" />
 
+## Code
+Feature Eng - `features.py`
+Custom Model Modules - `OrdinalRegressor.py`, `OptimizeThresholds.py`
+Final Model Notebook - `FinalModelNotebook.ipynb`
+
 ## Feature Engineering
 This dataset requires substantial feature engineering as the training and test datasets given are event logs for each `installation_id` of the PBS KIDS Measure Up! app. The training dataset contains 11,341,042 events for 17,690 installation_id/assessments combinations. 
 In order to predict the assessment accuracy group these events need to be transformed into feature vectors for each of the 17,690 training labels. The following steps are done to extract such vectors:  
