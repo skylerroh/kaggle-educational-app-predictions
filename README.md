@@ -71,3 +71,6 @@ CV scores on regular Kfold splits yielding greater quadratic weighted kappa scor
 1. XGBoostRegressor
 2. TFKerasSequential MLP
 3. OptimizeThresholds for quadratic weighted kappa using linear solver
+
+## Slide Deck
+https://docs.google.com/presentation/d/1_juJAJpkePGlDvni5cj92VV4Y-H4xWntGBzoXzBnPWc/edit?usp=sharing
