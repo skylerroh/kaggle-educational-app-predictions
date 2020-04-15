@@ -29,7 +29,5 @@ class OrdinalRegressor():
         return self.classify(self.predict(X))
     
     def predict_proba(self, X):
-        return self.predict_and_classify(X)
-    
-    def decision_function(self, X):
+        # overload predict_proba method to output the final classification
         return self.predict_and_classify(X)
